@@ -15,11 +15,55 @@ function debounce(fn, delay) {
    PIXEL SKY CANVAS
    ================================================= */
 
+/* Draw a charming retro pixel moon (blocky 8-bit style) */
+function drawMoon(ctx, originX, originY) {
+  const S = 9; // size of each moon "pixel"
+
+  // Moon body rows: [startCol, width] in moon-pixel units
+  const bodyRows = [
+    [2, 4],  // row 0
+    [1, 6],  // row 1
+    [0, 8],  // row 2
+    [0, 8],  // row 3
+    [0, 8],  // row 4
+    [0, 8],  // row 5
+    [1, 6],  // row 6
+    [2, 4],  // row 7
+  ];
+
+  // Crater positions [col, row] in moon-pixel units
+  const craters = [
+    [2, 2], [5, 4], [3, 6],
+  ];
+  const craterSet = new Set(craters.map(([c, r]) => `${c},${r}`));
+
+  // Draw moon body (warm white)
+  ctx.fillStyle = 'rgba(238, 238, 210, 0.90)';
+  bodyRows.forEach(([startCol, width], row) => {
+    for (let col = startCol; col < startCol + width; col++) {
+      if (!craterSet.has(`${col},${row}`)) {
+        ctx.fillRect(
+          originX + col * S,
+          originY + row * S,
+          S - 1, // 1px gap between moon pixels
+          S - 1
+        );
+      }
+    }
+  });
+
+  // Draw craters (darker tone)
+  ctx.fillStyle = 'rgba(170, 170, 140, 0.75)';
+  craters.forEach(([col, row]) => {
+    ctx.fillRect(originX + col * S, originY + row * S, S - 1, S - 1);
+  });
+}
+
 function buildParticlePool(canvas, ctaRect) {
   const particles = [];
 
-  const DENSITY_NORMAL = 0.00014;
-  const DENSITY_CTA    = 0.00030;
+  const DENSITY_NORMAL = 0.00016;
+  const DENSITY_CTA    = 0.00032;
 
   const totalArea  = canvas.width * canvas.height;
   const ctaArea    = ctaRect.width * ctaRect.height;
@@ -29,26 +73,26 @@ function buildParticlePool(canvas, ctaRect) {
   const ctaCount    = Math.floor(ctaArea    * DENSITY_CTA);
 
   function makeParticle(x, y, isCta) {
-    const alphaMax = isCta ? 0.92 : 0.65;
-    const alphaMin = 0.04;
+    const alphaMax = isCta ? 0.95 : 0.72;
+    const alphaMin = 0.06;
     return {
       x,
       y,
-      size: Math.random() * 2 + 4, // 4–6px
-      // Approx 70% white, 30% grey
+      size: Math.round(Math.random() * 2) + 4, // 4, 5, or 6px — crisp integer sizes
+      // 70% white stars, 30% grey (distant) stars
       color: Math.random() > 0.3
         ? 'rgba(255,255,255,'
-        : 'rgba(175,185,198,',
+        : 'rgba(165,178,195,',
       alpha:       Math.random() * (alphaMax - alphaMin) + alphaMin,
       alphaTarget: Math.random() * (alphaMax - alphaMin) + alphaMin,
       alphaMin,
       alphaMax,
-      speed:    Math.random() * 0.009 + 0.003,
+      speed:     Math.random() * 0.008 + 0.002,
       isCtaZone: isCta,
     };
   }
 
-  // Normal scatter across the full canvas
+  // Scatter stars across the whole canvas
   for (let i = 0; i < normalCount; i++) {
     particles.push(makeParticle(
       Math.random() * canvas.width,
@@ -57,7 +101,7 @@ function buildParticlePool(canvas, ctaRect) {
     ));
   }
 
-  // CTA zone — denser scatter within the CTA rect
+  // Denser star field in the CTA zone
   for (let i = 0; i < ctaCount; i++) {
     particles.push(makeParticle(
       ctaRect.left + Math.random() * ctaRect.width,
@@ -66,15 +110,15 @@ function buildParticlePool(canvas, ctaRect) {
     ));
   }
 
-  // Cluster seeds — organic groupings (like star clusters)
-  const clusterCount = 10;
+  // Cluster seeds — organic groupings like a real starfield
+  const clusterCount = 12;
   for (let c = 0; c < clusterCount; c++) {
     const cx = Math.random() * canvas.width;
     const cy = Math.random() * canvas.height;
-    const clusterSize = Math.floor(Math.random() * 20) + 8;
-    const spread = 75;
+    const clusterSize = Math.floor(Math.random() * 22) + 8; // 8–29 stars per cluster
+    const spread = 80;
     for (let p = 0; p < clusterSize; p++) {
-      // Triangular distribution for natural cluster falloff
+      // Triangular distribution → natural cluster falloff at edges
       const dx = (Math.random() + Math.random() - 1) * spread;
       const dy = (Math.random() + Math.random() - 1) * spread;
       particles.push(makeParticle(cx + dx, cy + dy, false));
@@ -89,12 +133,12 @@ function tickParticles(particles) {
     const p = particles[i];
     const diff = p.alphaTarget - p.alpha;
 
-    if (Math.abs(diff) < 0.006) {
-      // Pick a new alpha target
+    if (Math.abs(diff) < 0.007) {
+      // Reached target — pick a new random opacity target (twinkle)
       p.alphaTarget = p.alphaMin + Math.random() * (p.alphaMax - p.alphaMin);
-      // CTA particles occasionally flash very bright
-      if (p.isCtaZone && Math.random() > 0.65) {
-        p.alphaTarget = 0.80 + Math.random() * 0.18;
+      // CTA stars occasionally flash very bright
+      if (p.isCtaZone && Math.random() > 0.60) {
+        p.alphaTarget = 0.82 + Math.random() * 0.18;
       }
     } else {
       p.alpha += diff * p.speed * 60;
@@ -105,11 +149,15 @@ function tickParticles(particles) {
   }
 }
 
-function drawFrame(ctx, particles) {
-  // Semi-transparent fill instead of clear → short motion-blur trail
-  ctx.fillStyle = 'rgba(46,99,224,0.38)';
+function drawFrame(ctx, particles, moonX, moonY) {
+  // Solid clear — crisp pixel squares, no motion blur
+  ctx.fillStyle = '#2E63E0';
   ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
+  // Moon (always drawn, fixed position on canvas)
+  drawMoon(ctx, moonX, moonY);
+
+  // Stars — drawn as crisp integer-aligned squares
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
     ctx.fillStyle = p.color + p.alpha.toFixed(3) + ')';
@@ -122,7 +170,8 @@ function initPixelSky() {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   let particles = [];
-  let rafId;
+  let moonX = 0;
+  let moonY = 0;
 
   function getCtaRect() {
     const ctaEl = document.getElementById('join');
@@ -138,18 +187,54 @@ function initPixelSky() {
   function resize() {
     canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
+    // Moon: upper-right area, clear of the navbar (~70px) and edge
+    moonX = canvas.width - 180;
+    moonY = 90;
     particles = buildParticlePool(canvas, getCtaRect());
   }
 
   function loop() {
     tickParticles(particles);
-    drawFrame(ctx, particles);
-    rafId = requestAnimationFrame(loop);
+    drawFrame(ctx, particles, moonX, moonY);
+    requestAnimationFrame(loop);
   }
 
   resize();
   window.addEventListener('resize', debounce(resize, 220));
   loop();
+}
+
+/* =================================================
+   HERO VIDEO SCROLL FADE
+   Ties video + overlay opacity to scroll position.
+   As the user scrolls through the hero, the video
+   dissolves into the pixel sky underneath.
+   ================================================= */
+
+function initHeroScrollFade() {
+  const hero    = document.getElementById('hero');
+  const video   = document.querySelector('.hero-video');
+  const overlay = document.querySelector('.hero-overlay');
+
+  if (!hero || !video) return;
+
+  function onScroll() {
+    const heroH   = hero.offsetHeight;
+    const scrollY = window.scrollY;
+
+    // Progress 0 (top of hero) → 1 (bottom of hero)
+    const progress = Math.min(Math.max(scrollY / heroH, 0), 1);
+
+    // Fade video out over the first 75% of the hero scroll
+    const fade = 1 - Math.min(progress / 0.75, 1);
+
+    video.style.opacity   = fade;
+    overlay.style.opacity = fade;
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  // Run once on load to set initial state
+  onScroll();
 }
 
 /* =================================================
@@ -163,12 +248,12 @@ function initNavbar() {
 
   if (!navbar) return;
 
-  // Scroll → .scrolled class
+  // Scroll → .scrolled class for increased opacity
   window.addEventListener('scroll', () => {
     navbar.classList.toggle('scrolled', window.scrollY > 60);
   }, { passive: true });
 
-  // Active link highlighting
+  // Active link highlighting via IntersectionObserver
   const sectionObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
@@ -214,13 +299,11 @@ function initMobileMenu() {
   }
 
   hamburger.addEventListener('click', openMenu);
-  if (closeBtn)  closeBtn.addEventListener('click', closeMenu);
-  if (overlay)   overlay.addEventListener('click', closeMenu);
+  if (closeBtn) closeBtn.addEventListener('click', closeMenu);
+  if (overlay)  overlay.addEventListener('click', closeMenu);
 
-  // Close on any menu link tap
   menu.querySelectorAll('a').forEach(link => link.addEventListener('click', closeMenu));
 
-  // Escape key
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && menu.classList.contains('open')) closeMenu();
   });
@@ -236,12 +319,11 @@ function initValueCards() {
   cards.forEach(card => {
     function toggle() {
       const isOpen = card.dataset.expanded === 'true';
-      card.dataset.expanded   = isOpen ? 'false' : 'true';
+      card.dataset.expanded = isOpen ? 'false' : 'true';
       card.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
     }
 
     card.addEventListener('click', toggle);
-
     card.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -280,6 +362,7 @@ function initScrollReveal() {
 
 document.addEventListener('DOMContentLoaded', () => {
   initPixelSky();
+  initHeroScrollFade();
   initNavbar();
   initMobileMenu();
   initValueCards();

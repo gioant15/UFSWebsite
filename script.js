@@ -125,24 +125,26 @@ function drawCloud(ctx, cloud) {
    ================================================= */
 
 function drawMoon(ctx, originX, originY) {
-  const S = 11; // each "moon pixel" = 11 screen pixels
+  const S = 13; // 20% bigger than before (was 11)
 
-  // Moon body rows: [startCol, numberOfCols]
+  // Symmetrical circle: 10×10 grid, centre at (5.5, 4.5)
+  // Each row: [startCol, cellCount] — derived from circle equation r=5
   const bodyRows = [
-    [3, 6],   // row 0
-    [1, 9],   // row 1
-    [0, 11],  // row 2
-    [0, 11],  // row 3
-    [0, 11],  // row 4
-    [0, 11],  // row 5
-    [0, 11],  // row 6
-    [1, 9],   // row 7
-    [3, 6],   // row 8
+    [3, 5],  // row 0
+    [2, 7],  // row 1
+    [1, 9],  // row 2
+    [1, 9],  // row 3
+    [0, 10], // row 4  ← widest
+    [0, 10], // row 5  ← widest
+    [1, 9],  // row 6
+    [1, 9],  // row 7
+    [2, 7],  // row 8
+    [3, 5],  // row 9
   ];
 
-  // Craters [col, row]
-  const craters = [[2,2],[7,4],[4,6],[8,2]];
-  const craterSet = new Set(craters.map(([c,r]) => `${c},${r}`));
+  // Craters [col, row] — positioned within the circle
+  const craters = [[3, 2], [7, 3], [4, 6], [6, 8]];
+  const craterSet = new Set(craters.map(([c, r]) => `${c},${r}`));
 
   // Moon body — warm off-white
   ctx.fillStyle = 'rgba(235, 235, 205, 0.92)';
@@ -159,10 +161,9 @@ function drawMoon(ctx, originX, originY) {
     }
   });
 
-  // Craters — darker tone
+  // Craters — slightly darker
   ctx.fillStyle = 'rgba(168, 165, 135, 0.78)';
   craters.forEach(([ci, ri]) => {
-    // Only draw crater if within the body shape
     const row = bodyRows[ri];
     if (row && ci >= row[0] && ci < row[0] + row[1]) {
       ctx.fillRect(
@@ -184,9 +185,9 @@ function buildParticlePool(canvas, ctaRect) {
 
   // Grid-based placement — guarantees even coverage across the full background.
   // Each cell gets at most one star, placed near the cell centre with small jitter.
-  const CELL   = 44;  // px between stars
-  const JITTER = 13;  // max random offset from cell centre
-  const SKIP   = 0.14; // 14% of cells left empty for slight organic feel
+  const CELL   = 62;  // px between stars — larger = fewer stars
+  const JITTER = 16;  // max random offset from cell centre
+  const SKIP   = 0.18; // 18% of cells left empty for slight organic feel
 
   const cols = Math.ceil(canvas.width  / CELL) + 1;
   const rows = Math.ceil(canvas.height / CELL) + 1;
@@ -211,7 +212,7 @@ function buildParticlePool(canvas, ctaRect) {
       alphaTarget: Math.random() * (alphaMax - alphaMin) + alphaMin,
       alphaMin,
       alphaMax,
-      speed:     Math.random() * 0.006 + 0.002,
+      speed:     Math.random() * 0.0022 + 0.0006, // slower twinkle cycle
       isCtaZone: isCta,
     };
   }
@@ -322,7 +323,7 @@ function initPixelSky() {
     moonY = 88;
 
     particles = buildParticlePool(canvas, getCtaRect());
-    clouds    = initClouds(canvas.width, canvas.height, 14);
+    clouds    = initClouds(canvas.width, canvas.height, 22);
   }
 
   function loop() {

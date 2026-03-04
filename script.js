@@ -125,55 +125,32 @@ function drawCloud(ctx, cloud) {
    ================================================= */
 
 function drawMoon(ctx, originX, originY) {
-  const S = 13; // 20% bigger than before (was 11)
+  const S = 13;  // screen pixels per moon-cell
+  const R = 6;   // circle radius in moon-cells
+  const C = R;   // centre col = R  (grid is 0 … 2R)
+  // diameter = 2R+1 = 13 cells
 
-  // Symmetrical circle: 10×10 grid, centre at (5.5, 4.5)
-  // Each row: [startCol, cellCount] — derived from circle equation r=5
-  const bodyRows = [
-    [3, 5],  // row 0
-    [2, 7],  // row 1
-    [1, 9],  // row 2
-    [1, 9],  // row 3
-    [0, 10], // row 4  ← widest
-    [0, 10], // row 5  ← widest
-    [1, 9],  // row 6
-    [1, 9],  // row 7
-    [2, 7],  // row 8
-    [3, 5],  // row 9
-  ];
+  // Craters: [col, row] — all verified inside the circle (dx²+dy²≤R²)
+  const craters = new Set(['4,3', '9,4', '4,8', '8,9']);
 
-  // Craters [col, row] — positioned within the circle
-  const craters = [[3, 2], [7, 3], [4, 6], [6, 8]];
-  const craterSet = new Set(craters.map(([c, r]) => `${c},${r}`));
+  for (let row = 0; row <= R * 2; row++) {
+    for (let col = 0; col <= R * 2; col++) {
+      const dx = col - C;
+      const dy = row - C;
+      if (dx * dx + dy * dy > R * R) continue; // outside circle
 
-  // Moon body — warm off-white
-  ctx.fillStyle = 'rgba(235, 235, 205, 0.92)';
-  bodyRows.forEach(([startCol, count], ri) => {
-    for (let ci = startCol; ci < startCol + count; ci++) {
-      if (!craterSet.has(`${ci},${ri}`)) {
-        ctx.fillRect(
-          Math.round(originX + ci * S),
-          Math.round(originY + ri * S),
-          S - 1,
-          S - 1
-        );
-      }
-    }
-  });
+      ctx.fillStyle = craters.has(`${col},${row}`)
+        ? 'rgba(162, 158, 128, 0.80)'   // crater — darker
+        : 'rgba(235, 235, 205, 0.92)';  // body  — warm white
 
-  // Craters — slightly darker
-  ctx.fillStyle = 'rgba(168, 165, 135, 0.78)';
-  craters.forEach(([ci, ri]) => {
-    const row = bodyRows[ri];
-    if (row && ci >= row[0] && ci < row[0] + row[1]) {
       ctx.fillRect(
-        Math.round(originX + ci * S),
-        Math.round(originY + ri * S),
-        S - 1,
+        Math.round(originX + col * S),
+        Math.round(originY + row * S),
+        S - 1,  // 1 px gap between cells keeps the pixel grid visible
         S - 1
       );
     }
-  });
+  }
 }
 
 /* =================================================

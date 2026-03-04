@@ -182,63 +182,52 @@ function drawMoon(ctx, originX, originY) {
 function buildParticlePool(canvas, ctaRect) {
   const particles = [];
 
-  const DENSITY_NORMAL = 0.00015;
-  const DENSITY_CTA    = 0.00032;
+  // Grid-based placement — guarantees even coverage across the full background.
+  // Each cell gets at most one star, placed near the cell centre with small jitter.
+  const CELL   = 44;  // px between stars
+  const JITTER = 13;  // max random offset from cell centre
+  const SKIP   = 0.14; // 14% of cells left empty for slight organic feel
 
-  const totalArea  = canvas.width * canvas.height;
-  const ctaArea    = ctaRect.width * ctaRect.height;
-  const normalArea = Math.max(0, totalArea - ctaArea);
+  const cols = Math.ceil(canvas.width  / CELL) + 1;
+  const rows = Math.ceil(canvas.height / CELL) + 1;
 
   function makeParticle(x, y, isCta) {
-    const alphaMax = isCta ? 0.95 : 0.75;
-    const alphaMin = 0.08;
+    const alphaMax = isCta ? 0.98 : 0.82;
+    const alphaMin = 0.12;
+    // 55% are pixel-cross stars, 45% are plain dot stars
+    const shape = Math.random() > 0.45 ? 'cross' : 'dot';
     return {
-      x,
-      y,
-      // Sizes are always exact integers — crisp pixel squares
-      size: [4, 4, 4, 5, 6][Math.floor(Math.random() * 5)],
-      // 68% white (bright stars), 32% grey (distant stars)
-      color: Math.random() > 0.32
+      // Snap to 2 px grid — every coordinate is even, no sub-pixel blurring
+      x: Math.round(x / 2) * 2,
+      y: Math.round(y / 2) * 2,
+      shape,
+      // cross arms use 2 px cells; dot uses a 4 px square
+      size: 2,
+      // 65% bright white, 35% soft grey
+      color: Math.random() > 0.35
         ? 'rgba(255,255,255,'
-        : 'rgba(162,175,195,',
+        : 'rgba(160,175,200,',
       alpha:       Math.random() * (alphaMax - alphaMin) + alphaMin,
       alphaTarget: Math.random() * (alphaMax - alphaMin) + alphaMin,
       alphaMin,
       alphaMax,
-      speed:     Math.random() * 0.007 + 0.002,
+      speed:     Math.random() * 0.006 + 0.002,
       isCtaZone: isCta,
     };
   }
 
-  const normalCount = Math.floor(normalArea * DENSITY_NORMAL);
-  const ctaCount    = Math.floor(ctaArea    * DENSITY_CTA);
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (Math.random() < SKIP) continue;
 
-  for (let i = 0; i < normalCount; i++) {
-    particles.push(makeParticle(
-      Math.random() * canvas.width,
-      Math.random() * canvas.height,
-      false
-    ));
-  }
+      const cx = col * CELL + CELL / 2 + (Math.random() * 2 - 1) * JITTER;
+      const cy = row * CELL + CELL / 2 + (Math.random() * 2 - 1) * JITTER;
 
-  for (let i = 0; i < ctaCount; i++) {
-    particles.push(makeParticle(
-      ctaRect.left + Math.random() * ctaRect.width,
-      ctaRect.top  + Math.random() * ctaRect.height,
-      true
-    ));
-  }
+      const isCta = ctaRect.height > 0 &&
+                    cy >= ctaRect.top &&
+                    cy <= ctaRect.top + ctaRect.height;
 
-  // Cluster seeds — organic star groupings
-  for (let c = 0; c < 14; c++) {
-    const cx = Math.random() * canvas.width;
-    const cy = Math.random() * canvas.height;
-    const count = Math.floor(Math.random() * 22) + 6;
-    const spread = 85;
-    for (let p = 0; p < count; p++) {
-      const dx = (Math.random() + Math.random() - 1) * spread;
-      const dy = (Math.random() + Math.random() - 1) * spread;
-      particles.push(makeParticle(cx + dx, cy + dy, false));
+      particles.push(makeParticle(cx, cy, isCta));
     }
   }
 
@@ -285,11 +274,26 @@ function drawFrame(ctx, particles, clouds, moonX, moonY) {
   // 3. Clouds (drifting left, behind stars so stars twinkle in front)
   clouds.forEach(c => drawCloud(ctx, c));
 
-  // 4. Stars (pixel squares, integer-aligned)
+  // 4. Stars — two geometric shapes, all coordinates on 2 px grid
   for (let i = 0; i < particles.length; i++) {
     const p = particles[i];
     ctx.fillStyle = p.color + p.alpha.toFixed(3) + ')';
-    ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+    const x = p.x;
+    const y = p.y;
+    const s = p.size; // 2 px
+
+    if (p.shape === 'cross') {
+      // Pixel plus/cross: 5 cells of s×s arranged in a + pattern
+      // Total footprint: (3s) × (3s) = 6×6 px
+      ctx.fillRect(x,     y - s, s, s); // top
+      ctx.fillRect(x - s, y,     s, s); // left
+      ctx.fillRect(x,     y,     s, s); // centre
+      ctx.fillRect(x + s, y,     s, s); // right
+      ctx.fillRect(x,     y + s, s, s); // bottom
+    } else {
+      // Dot: solid 4×4 square (2s × 2s)
+      ctx.fillRect(x, y, s * 2, s * 2);
+    }
   }
 }
 
